@@ -3,7 +3,6 @@ import { config } from "https://deno.land/x/dotenv/mod.ts";
 
 config({ safe: true, export: true });
 
-// i83a5ThEaloT8g9E
 const client = new MongoClient();
 client.connectWithUri(String(Deno.env.get("MONGO_URI")));
 
