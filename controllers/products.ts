@@ -45,7 +45,7 @@ const getProduct = async (
 };
 
 // @desc    Add a Product
-// @route   Post /api/v1/products
+// @route   POST /api/v1/products
 const addProduct = async (
   { request, response }: RouterContext,
 ) => {
