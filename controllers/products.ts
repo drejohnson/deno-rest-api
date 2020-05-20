@@ -1,67 +1,45 @@
 import { RouterContext } from "https:/deno.land/x/oak/mod.ts";
-import { v4 } from "https://deno.land/std/uuid/mod.ts";
+import db from "../db/mongo.ts";
 import { Product } from "../types.ts";
 
-let products: Product[] = [
-  {
-    id: "1",
-    name: "Product One",
-    description: "This is Product One",
-    price: 59.99,
-  },
-  {
-    id: "2",
-    name: "Product Two",
-    description: "This is Product Two",
-    price: 10.99,
-  },
-  {
-    id: "3",
-    name: "Product Three",
-    description: "This is Product Three",
-    price: 49.99,
-  },
-  {
-    id: "4",
-    name: "Product Four",
-    description: "This is Product Four",
-    price: 29.99,
-  },
-  {
-    id: "5",
-    name: "Product Five",
-    description: "This is Product Five",
-    price: 9.99,
-  },
-];
+const products = db.collection("products");
 
 // @desc    Get all Products
 // @route   GET /api/v1/products
-const getProducts = ({ response }: RouterContext) => {
+const getProducts = async ({ response }: RouterContext) => {
   response.body = {
     success: true,
-    data: products,
+    data: await products.find(),
   };
 };
 
 // @desc    Get a single Product
 // @route   GET /api/v1/products/:id
-const getProduct = (
+const getProduct = async (
   { params, response }: RouterContext,
 ) => {
-  const product: Product | undefined = products.find((p) => p.id === params.id);
+  try {
+    const product = await products.findOne({ _id: { $oid: params.id } });
 
-  if (product) {
+    if (!product) {
+      response.status = 404;
+      response.body = {
+        success: false,
+        msg: "Product not found",
+      };
+      return;
+    }
+
     response.status = 200;
     response.body = {
       success: true,
       data: product,
     };
-  } else {
-    response.status = 404;
+  } catch (error) {
+    response.status = 500;
     response.body = {
       success: false,
-      data: "Product not found",
+      msg: error,
     };
   }
 };
@@ -71,22 +49,37 @@ const getProduct = (
 const addProduct = async (
   { request, response }: RouterContext,
 ) => {
-  const body = await request.body();
+  try {
+    const body = await request.body();
 
-  if (!request.hasBody) {
-    response.status = 400;
-    response.body = {
-      success: false,
-      data: "No Data",
-    };
-  } else {
-    const product: Product = body.value;
-    product.id = v4.generate();
-    products.push(product);
+    if (!request.hasBody) {
+      response.status = 400;
+      response.body = {
+        success: false,
+        data: "No Data",
+      };
+      return;
+    }
+
+    const { name, description, price }: Product = body.value;
+    const { $oid } = await products.insertOne({
+      name,
+      description,
+      price,
+    });
+
+    const product = await products.findOne({ _id: { $oid } });
+
     response.status = 201;
     response.body = {
       success: true,
       data: product,
+    };
+  } catch (error) {
+    response.status = 500;
+    response.body = {
+      success: false,
+      msg: error,
     };
   }
 };
@@ -96,46 +89,87 @@ const addProduct = async (
 const updateProduct = async (
   { params, request, response }: RouterContext,
 ) => {
-  const product: Product | undefined = products.find((p) => p.id === params.id);
-
-  if (product) {
+  try {
     const body = await request.body();
-    const updateProduct: {
+    const updateData: {
       name?: string;
       description?: string;
       price?: number;
     } = body.value;
 
-    products = products.map((p) =>
-      p.id === params.id ? { ...p, ...updateProduct } : p
+    if (!updateData) {
+      response.status = 500;
+      response.body = {
+        success: false,
+        msg: "The posts could not be removed",
+      };
+      return;
+    }
+
+    const updatedProduct = await products.updateOne(
+      { _id: { $oid: params.id } },
+      {
+        $set: {
+          ...updateData,
+        },
+      },
     );
+
+    if (!updatedProduct) {
+      response.status = 404;
+      response.body = {
+        success: false,
+        msg: "The product with the specified ID does not exist.",
+      };
+      return;
+    }
+
+    const product = await products.findOne({ _id: { $oid: params.id } });
 
     response.status = 200;
     response.body = {
       success: true,
-      data: products,
+      data: product,
     };
-  } else {
-    response.status = 400;
+  } catch (error) {
+    response.status = 500;
     response.body = {
       success: false,
-      data: "Product not found",
+      msg: error,
     };
   }
 };
 
 // @desc    delete a Product
 // @route   DELETE /api/v1/products/:id
-const deleteProduct = (
+const deleteProduct = async (
   { params, response }: RouterContext,
 ) => {
-  products = products.filter((p) => p.id !== params.id);
-  response.status = 200;
-  response.body = {
-    success: true,
-    msg: `Product with id: ${params.id} removed`,
-    data: products,
-  };
+  try {
+    const removedProduct = await products.deleteOne(
+      { _id: { $oid: params.id } },
+    );
+    if (!removedProduct) {
+      response.status = 404;
+      response.body = {
+        success: false,
+        msg: "Product not found",
+      };
+      return;
+    }
+
+    response.status = 200;
+    response.body = {
+      success: true,
+      msg: `Product with id: ${params.id} was deleted`,
+    };
+  } catch (error) {
+    response.status = 500;
+    response.body = {
+      success: false,
+      data: error,
+    };
+  }
 };
 
 export { getProducts, getProduct, addProduct, updateProduct, deleteProduct };
