@@ -1,9 +1,9 @@
 import { Middleware } from "https:/deno.land/x/oak/mod.ts";
 
 export const timer: Middleware = async (ctx, next) => {
-  const start = Date.now();
+  const start = performance.now();
   await next();
-  const duration = Date.now() - start;
+  const duration = performance.now() - start;
   console.log(`from timer: ${duration}ms`);
   ctx.response.headers.set("X-Response-Time", `${duration}ms`);
 };
